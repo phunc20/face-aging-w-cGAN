@@ -4,13 +4,14 @@ import os
 import time
 import math
 from glob import glob
+from six.moves import xrange
+
 import tensorflow as tf
 import numpy as np
-from six.moves import xrange
+from tensorflow.keras.preprocessing import image as kimage
 
 from ops import *
 from utils import *
-from keras.preprocessing import image as kimage
 
 def conv_out_size_same(size, stride):
   return int(math.ceil(float(size) / float(stride)))
@@ -22,12 +23,16 @@ def gen_random(mode, size):
 
 
 class DCGAN(object):
-  def __init__(self, sess, input_height=108, input_width=108, crop=True,
-         batch_size=64, sample_num = 64, output_height=64, output_width=64,
+  def __init__(self, sess,
+         input_height=108, input_width=108, crop=True,
+         batch_size=64, sample_num = 64,
+         output_height=64, output_width=64,
          y_dim=6, z_dim=100, gf_dim=64, df_dim=64,
-         gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
+         gfc_dim=1024, dfc_dim=1024, c_dim=3,
+         dataset_name='default',
          max_to_keep=1,
-         input_fname_pattern='*.jpg', checkpoint_dir='ckpts', sample_dir='samples', out_dir='./out', data_dir="./ref/dcgan/carpedm20--tf/data/"):
+         input_fname_pattern='*.jpg',
+         data_dir=os.path.join(os.environ["HOME"],"datasets", "UTKFace")):
     """
 
     Args:
@@ -64,7 +69,8 @@ class DCGAN(object):
     self.gfc_dim = gfc_dim
     self.dfc_dim = dfc_dim
 
-    # batch normalization : deals with poor initialization helps gradient flow
+    # batch normalization : 
+    # deals with poor initialization, helps gradient flow.
     self.d_bn1 = batch_norm(name='d_bn1')
     self.d_bn2 = batch_norm(name='d_bn2')
 
@@ -77,16 +83,19 @@ class DCGAN(object):
     self.g_bn3 = batch_norm(name='g_bn3')
 
     self.dataset_name = dataset_name
-    self.input_fname_pattern = input_fname_pattern  # *.jpg
-    self.checkpoint_dir = checkpoint_dir
+    self.input_fname_pattern = input_fname_pattern  # e.g. *.jpg
+    ckpts_dir = "cGAN-ckpts"
+    os.makedirs(ckpts_dir, exist_ok=True)
+    self.out_dir = os.path.join(ckpts_dir,
+                     ("g{}d{}"
+                     )
+                   )
+    #self.checkpoint_dir = checkpoint_dir
     self.data_dir = data_dir
-    self.out_dir = out_dir
     self.max_to_keep = max_to_keep
 
     #data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
     #self.data = glob(data_path)
-    #self.data = glob(os.path.join(
-    #    "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/all-races", "*.jpg"))
     #self.data = glob(os.path.join(
     #    "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/UTKFace-clean", "*.jpg"))
     self.data = glob(os.path.join(
@@ -105,7 +114,7 @@ class DCGAN(object):
     
     self.grayscale = (self.c_dim == 1)
 
-    self.build_model()
+    #self.build_model()
 
   def build_model(self):
     if self.y_dim:
@@ -154,20 +163,35 @@ class DCGAN(object):
       except:
         return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, targets=y)
 
-    self.d_loss_real = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
+    #self.d_loss_real = tf.reduce_mean(
+    #  sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
     #self.d_loss_real = tf.reduce_mean(
     #  sigmoid_cross_entropy_with_logits(self.D_logits, 0.9*tf.ones_like(self.D)))
-    
-    self.d_loss_fake = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
+
+    self.d_loss_real = tf.reduce_mean(
+      sigmoid_cross_entropy_with_logits(self.D_logits,
+        tf.random.uniform(tf.shape(self.D), minval=0.8, maxval=1),
+        ))
+   
+
+    #self.d_loss_fake = tf.reduce_mean(
+    #  sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
     #self.d_loss_fake = tf.reduce_mean(
     #  sigmoid_cross_entropy_with_logits(self.D_logits_, 0.1*tf.ones_like(self.D_)))
-    
-    self.d_loss_real_wrong = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits2, tf.zeros_like(self.D2)))
+    self.d_loss_fake = tf.reduce_mean(
+      sigmoid_cross_entropy_with_logits(self.D_logits_,
+        tf.random.uniform(tf.shape(self.D_), minval=0, maxval=0.2),
+        ))
+   
+
+    #self.d_loss_real_wrong = tf.reduce_mean(
+    #  sigmoid_cross_entropy_with_logits(self.D_logits2, tf.zeros_like(self.D2)))
     #self.d_loss_real_wrong = tf.reduce_mean(
     #  sigmoid_cross_entropy_with_logits(self.D_logits2, 0.03*tf.ones_like(self.D2)))
+    self.d_loss_real_wrong = tf.reduce_mean(
+      sigmoid_cross_entropy_with_logits(self.D_logits2,
+        tf.random.uniform(tf.shape(self.D2), minval=0, maxval=0.2),
+        ))
 
 
     self.g_loss = tf.reduce_mean(
@@ -192,6 +216,61 @@ class DCGAN(object):
     self.saver = tf.train.Saver(max_to_keep=self.max_to_keep)
 
   def train(self, config):
+    """
+    In main.py, we shall call this method with
+      train(FLAGS)
+    So, think of config as FLAGS.
+    """
+    # Construct (or Identify the existing)
+    # folders for ckpts and image files.
+    cGAN_img_eval = "cGAN-img-eval"
+    os.makedirs(cGAN_img_eval, exist_ok=True)
+    n_times_g = 2
+    n_times_d = 3
+    tstamp = "g{}d{}-".format(n_times_g, n_times_d) \
+              + config.z_dist + "-" + \
+              time.strftime("%Y-%m-%d_%Hh%Mm%Ss")
+    #img_dir = "images-" + config.z_dist + "-" + time.strftime("%Y%m%d-%Hh%Mm%Ss")
+    #img_dir = "gdrate-{}-{}-".format(n_times_g, n_times_d) + img_dir
+    img_dir = os.path.join(cGAN_img_eval, tstamp)
+    log_file_path = os.path.join(img_dir, "train-log")
+    os.makedirs(img_dir, exist_ok=True)
+    for i in range(10):
+      os.makedirs(
+        os.path.join(img_dir, "subject-" + str(i).zfill(2)),
+        exist_ok=True,
+      )
+    
+    out_parent_dir = "cGAN-ckpts"
+    self.out_dir = os.path.join(out_parent_dir, tstamp)
+    os.makedirs(self.out_dir, exist_ok=True)
+    self.ckpts_dir = os.path.join(self.out_dir,"ckpts")
+    os.makedirs(self.ckpts_dir, exist_ok=True)
+
+    counter = 1
+    # counter = #(total batches we will run through in config.epoch epochs)
+    start_time = time.time()
+    could_load, checkpoint_counter = self.load(self.ckpts_dir)
+    npy_saved_sample_z = "sample_z.npy"
+    sample_z_path = os.path.join(self.out_dir, npy_saved_sample_z)
+    if could_load:
+      counter = checkpoint_counter
+      print(" [*] Load ckpt SUCCESSfully")
+      if os.path.exists(sample_z_path):
+        sample_z = np.load(sample_z_path)
+      else:
+        print(" [!] Intermediate changing period")
+        print(" [!] ckpt exists but no sample_z.py")
+        np.random.seed(42)
+        sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
+        np.save(sample_z_path, sample_z)
+    else:
+      print(" [!] Load failed...")
+      self.build_model()
+      print(" [*] Creating 10 new subjects... (sample_z)") 
+
+
+    # Optimizers' choice
     d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
               .minimize(self.d_loss, var_list=self.d_vars)
     g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
@@ -235,17 +314,6 @@ class DCGAN(object):
           yy[i][np.random.randint(0,2+1)] = 1
       return yy
 
-
-    ##sample_z = gen_random(config.z_dist, size=(self.sample_num , self.z_dim))
-    ##np.random.seed(42)
-    #sample_z = gen_random(config.z_dist, size=(self.sample_num , self.z_dim)).astype(np.float32)
-    ##print(bcolors.OKGREEN + bcolors.BOLD, end='')
-    ##print("sample_z = {}".format(sample_z))
-    #for j in range(0, 64, 10):
-    #    dist_to_0 = np.linalg.norm(sample_z[j])
-    #    print("sample_z[{}] to 0: {:.4f}".format(j, dist_to_0))
-    ##print(bcolors.ENDC)
-    
     sample_files = self.data[0:self.sample_num]
     sample = [get_image(sample_file) for sample_file in sample_files]
     # dtype conversion to float32 (the default of tensorflow)
@@ -254,26 +322,6 @@ class DCGAN(object):
     else:
       sample_inputs = np.array(sample).astype(np.float32)
   
-    counter = 1
-    # counter = #(total batches we will run through in config.epoch epochs)
-    start_time = time.time()
-    could_load, checkpoint_counter = self.load(self.checkpoint_dir)
-    npy_saved_sample_z = "sample_z.npy"
-    sample_z_path = os.path.join(self.out_dir, npy_saved_sample_z)
-    if could_load:
-      counter = checkpoint_counter
-      print(" [*] Load ckpt SUCCESSfully")
-      if os.path.exists(sample_z_path):
-        sample_z = np.load(sample_z_path)
-      else:
-        print(" [!] Intermediate changing period")
-        print(" [!] ckpt exists but no sample_z.py")
-        np.random.seed(42)
-        sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
-        np.save(sample_z_path, sample_z)
-    else:
-      print(" [!] Load failed...")
-      print(" [*] Creating 10 new subjects... (sample_z)") 
       # sample_z contains more than 10 instances, just to be more flexible.
       # Here I set it to be 30, but it can be any int (>= 10).
       sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
@@ -288,22 +336,6 @@ class DCGAN(object):
     A = np.eye(6)
     #B = np.r_[A,A,A,A,A,A,A,A,A,A, np.zeros((4, 6))]
     B = np.r_[A,A,A,A,A,A,A,A,A,A]
-
-    #img_dir = "gan-celebA-" + config.z_dist
-    #img_dir = "images-" + config.z_dist + "-" + time.strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    n_times_g = 3
-    n_times_d = 4
-    img_dir = "images-" + config.z_dist + "-" + time.strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    img_dir = "gdrate-{}-{}-".format(n_times_g, n_times_d) + img_dir
-    log_file_path = os.path.join(img_dir, "train-log")
-    if not os.path.exists(img_dir):
-      os.mkdir(img_dir)
-      #os.mkdir(os.path.join("gan-celebA", "real-images"))
-    for i in range(10):
-      try:
-        os.mkdir(os.path.join(img_dir, "subject-" + str(i).zfill(2) ))
-      except:
-        print(img_dir + "/" + "subject-" + str(i).zfill(2), "failed creation.")
 
 
     def random_batch_real_images():
@@ -334,24 +366,12 @@ class DCGAN(object):
       # Note that we only need batch_y to have shape (64, 6) not (128, 6).
       # This is because the same batch_y is passed separately both to
       # discriminator and gan.
-      if self.grayscale:
-        batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
-        # grey image shape e.g. (64, 64) instead of (64, 64, 1)
-      else:
-        batch_images = np.array(batch).astype(np.float32)
+      batch_images = np.array(batch).astype(np.float32)
       
       return batch_images, batch_y, batch_fnames
 
 
     for epoch in xrange(config.epoch):
-      #self.data = glob(os.path.join(
-      #  config.data_dir, config.dataset, self.input_fname_pattern))
-      #self.data = glob(os.path.join(
-      #  "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/UTKFace-clean-13plus", "*.jpg"))
-      #self.data = glob(os.path.join(
-      #  "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/asian-mixed--w-hair", "*.jpg"))
-      #self.data = glob(os.path.join(
-      #  "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/all-races", "*.jpg"))
       #self.data = glob(os.path.join(
       #  "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/UTKFace-clean", "*.jpg"))
       #np.random.shuffle(self.data)
@@ -466,64 +486,8 @@ class DCGAN(object):
         if True:
           # sample_freq == 100 by default
           try:
-            """
-            First try: one face w/ 6 diff ages.
-            i.e. 54 rows wasted
-
-            """
-            ##A = np.zeros((64, 6))
-            ##A[:, 1] = 1
-            #A = np.eye(6)
-            #
-            #B = np.r_[A, np.zeros((58, 6))]
-            ##y_all_6_ages = tf.constant(B, dtype=tf.float32)  # shape = (6,6)
-            #
-            ## At this training stage, I only want to see
-            ## one face w/ diff ages.
-            ## The one face: sample_one_z
-            ## diff ages: B
-            #sample_one_z = sample_z[0]
-            ## sample_one_z.shape = (100,)
-            #sample_one_z = sample_one_z[np.newaxis, :]
-            ## sample_one_z.shape = (1, 100)
-            #sample_one_z = np.tile(sample_one_z, [64, 1])
-            ## sample_one_z.shape = (64, 100)
-            """
-            2nd try: 10 face w/ 6 diff ages.
-            i.e. 4 rows wasted
-            No, more generally, kk persons w/ kk <= 10.
-            """
-            ## First way to create the age
-            #A = np.eye(6)
-            #B = np.r_[A,A,A,A,A,A,A,A,A,A, np.zeros((4, 6))]
-            ## 2nd way to create the age
-            ##A = np.eye(6)
-            ##B = np.tile(A[..., np.newaxis], [10, 1, 1]).reshape(60,6)
-            ##B = np.r_[B, np.zeros((4, 6))]
-            ## debug
-            ##print(bcolors.OKGREEN + bcolors.BOLD, end='')
-            ##print("B.shape =", B.shape)
-            ##print("B.dtype =", B.dtype)
-            ##print(bcolors.ENDC)
-
-            #sample_10_z = sample_z[:10]
-            ## sample_10_z.shape = (10, 100)
-            ## sample_10_z.dtype = float64
-            #sample_10_z = np.repeat(sample_10_z, 6, axis=0)
-            ## sample_10_z.shape = (60, 100)
-            #sample_10_z = np.r_[sample_10_z, np.zeros((4, 100))]
-            ## sample_10_z.shape = (64, 100)
-            ##sample_10_z = sample_10_z.astype(np.float32)
-            ## debug
-            ##print(bcolors.OKGREEN + bcolors.BOLD, end='')
-            ##print("sample_10_z = np.repeat(sample_10_z, 6, axis=0)")
-            ##print("sample_10_z.dtype =", sample_10_z.dtype)
-            ##print("sample_10_z.shape =", sample_10_z.shape)
-            ##print(bcolors.ENDC)
-
             sample_10_z = np.r_[sample_05_z, random_05_z()]
             sample_10_z = np.repeat(sample_10_z, 6, axis=0)
-            #sample_10_z = np.r_[sample_10_z, np.zeros((4, 100))]
             samples = self.sess.run(self.sampler,
               feed_dict={
                   self.z: sample_10_z,
@@ -571,7 +535,8 @@ class DCGAN(object):
         if True:
           # ckpt_freq == 200 by default
           #self.save(config.checkpoint_dir, counter, global_step=counter)
-          self.save(config.checkpoint_dir, counter)
+          #self.save(config.checkpoint_dir, counter)
+          self.save(self.ckpts_dir, counter)
 
           # Stdout log for loss, precision, recall, etc.
           errD_real, errD_fake, errG, D, D_ = self.sess.run(
@@ -676,46 +641,58 @@ class DCGAN(object):
       s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
       # 4, 4
 
-      # project `z` and reshape
       zy = tf.concat([z, y], axis=1)
       # zy.shape = (None, 106)
 
       self.z_, self.h0_w, self.h0_b = linear(
           zy, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin', with_w=True)
 
-      # carpedm20 uses a fully-connected layer to map z to the
-      # dimension of first layer (4, 4, 64*8=512).
-      # Unlike soumith, who did the same via Conv2DTranspose.
+      # carpedm20 uses a fully-connected layer to map z to
+      # the dimension of first layer (4, 4, 64*8=512).
+      # Unlike soumith, who achieved the same
+      # using Conv2DTranspose.
       # N.B. by default, s_h16 = 4, s_w16 = 4, gf_dim = 64.
 
       self.h0 = tf.reshape(
           self.z_, [-1, s_h16, s_w16, self.gf_dim * 8])
-      h0 = tf.nn.relu(self.g_bn0(self.h0))
+      # Options: ReLU or Leaky ReLu
+      #h0 = tf.nn.relu(self.g_bn0(self.h0))
+      h0 = lrelu(self.g_bn0(self.h0))
 
       self.h1, self.h1_w, self.h1_b = deconv2d(
           h0, [tf.shape(z)[0], s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
-          #h0, [z.get_shape()[0], s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
-          #h0, [tf.shape(z)[0], s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
-          #h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
-      h1 = tf.nn.relu(self.g_bn1(self.h1))
+      # Options: ReLU or Leaky ReLu
+      #h1 = tf.nn.relu(self.g_bn1(self.h1))
+      h1 = lrelu(self.g_bn1(self.h1))
 
       h2, self.h2_w, self.h2_b = deconv2d(
           h1, [tf.shape(z)[0], s_h4, s_w4, self.gf_dim*2], name='g_h2', with_w=True)
-          #h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2', with_w=True)
-      h2 = tf.nn.relu(self.g_bn2(h2))
+      # Options: ReLU or Leaky ReLu
+      #h2 = tf.nn.relu(self.g_bn2(h2))
+      h2 = lrelu(self.g_bn2(h2))
 
       h3, self.h3_w, self.h3_b = deconv2d(
           h2, [tf.shape(z)[0], s_h2, s_w2, self.gf_dim*1], name='g_h3', with_w=True)
-          #h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3', with_w=True)
-      h3 = tf.nn.relu(self.g_bn3(h3))
+      # Options: ReLU or Leaky ReLu
+      #h3 = tf.nn.relu(self.g_bn3(h3))
+      h3 = lrelu(self.g_bn3(h3))
 
       h4, self.h4_w, self.h4_b = deconv2d(
           h3, [tf.shape(z)[0], s_h, s_w, self.c_dim], name='g_h4', with_w=True)
-          #h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4', with_w=True)
 
       return tf.nn.tanh(h4)
 
   def sampler(self, z, y):
+    """
+    Basically, this sampler() is almost identical to generator().
+    
+    I am not sure if this part is redundant, but
+    simply replacing sample() by generator() in the code
+    won't work.
+
+    I guess it's due to the variable scope and reuse.
+
+    """
     with tf.variable_scope("generator") as scope:
       scope.reuse_variables()
 
@@ -725,32 +702,30 @@ class DCGAN(object):
       s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
       s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-      # project `z` and reshape
-      #A = np.zeros((64, 6))
-      #A[:, 1] = 1
-      #A = np.eye(6)
-      #B = np.r_[A, np.zeros((58, 6))]
-      #y_all_6_ages = tf.constant(B, dtype=tf.float32)  # shape = (6,6)
       zy = tf.concat([z, y], axis=1)
       h0 = tf.reshape(
           linear(zy, self.gf_dim*8*s_h16*s_w16, 'g_h0_lin'),
           [-1, s_h16, s_w16, self.gf_dim * 8])
-      h0 = tf.nn.relu(self.g_bn0(h0, train=False))
+      # Options: ReLU or Leaky ReLu
+      #h0 = tf.nn.relu(self.g_bn0(h0, train=False))
+      h0 = lrelu(self.g_bn0(h0, train=False))
 
       h1 = deconv2d(h0, [tf.shape(z)[0], s_h8, s_w8, self.gf_dim*4], name='g_h1')
-      #h1 = deconv2d(h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1')
-      h1 = tf.nn.relu(self.g_bn1(h1, train=False))
+      # Options: ReLU or Leaky ReLu
+      #h1 = tf.nn.relu(self.g_bn1(h1, train=False))
+      h1 = lrelu(self.g_bn1(h1, train=False))
 
       h2 = deconv2d(h1, [tf.shape(z)[0], s_h4, s_w4, self.gf_dim*2], name='g_h2')
-      #h2 = deconv2d(h1, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_h2')
-      h2 = tf.nn.relu(self.g_bn2(h2, train=False))
+      # Options: ReLU or Leaky ReLu
+      #h2 = tf.nn.relu(self.g_bn2(h2, train=False))
+      h2 = lrelu(self.g_bn2(h2, train=False))
 
       h3 = deconv2d(h2, [tf.shape(z)[0], s_h2, s_w2, self.gf_dim*1], name='g_h3')
       #h3 = deconv2d(h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_h3')
-      h3 = tf.nn.relu(self.g_bn3(h3, train=False))
+      #h3 = tf.nn.relu(self.g_bn3(h3, train=False))
+      h3 = lrelu(self.g_bn3(h3, train=False))
 
       h4 = deconv2d(h3, [tf.shape(z)[0], s_h, s_w, self.c_dim], name='g_h4')
-      #h4 = deconv2d(h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4')
       
       return tf.nn.tanh(h4)
 
@@ -782,7 +757,6 @@ class DCGAN(object):
               as_text=False)
 
   def load(self, checkpoint_dir):
-    #import re
     print(" [*] Reading checkpoints...", checkpoint_dir)
     # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
     # print("     ->", checkpoint_dir)
@@ -791,7 +765,6 @@ class DCGAN(object):
     if ckpt and ckpt.model_checkpoint_path:
       ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
       self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
-      #counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
       counter = int(ckpt_name.split('-')[-1])
       print(" [*] Success to read {}".format(ckpt_name))
       return True, counter

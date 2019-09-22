@@ -37,9 +37,6 @@ flags.DEFINE_integer("output_height", 64, "The size of the output images to prod
 flags.DEFINE_integer("output_width", None, "The size of the output images to produce. If None, same value as output_height [None]")
 flags.DEFINE_string("dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
 flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of input images [*]")
-#flags.DEFINE_string("data_dir", "./ref/dcgan/carpedm20--tf/data/", "path to datasets [e.g. $HOME/data]")
-#flags.DEFINE_string("data_dir", "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/UTKFace-clean-13plus", "path to datasets [e.g. $HOME/data]")
-flags.DEFINE_string("data_dir", "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/asian-mixed--w-hair", "path to datasets [e.g. $HOME/data]")
 flags.DEFINE_string("out_dir", "./out", "Root directory for outputs [e.g. $HOME/out]")
 flags.DEFINE_string("out_name", "", "Folder (under out_root_dir) for all outputs. Generated automatically if left blank []")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Folder (under out_root_dir/out_name) to save checkpoints [checkpoint]")
@@ -177,7 +174,7 @@ def main(_):
       #print(bcolors.ENDC)
       #ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
       #ckpt_name = "model.b64-30000"
-      ckpt_name = "model.b64-23000"
+      ckpt_name = "model.b64-15300"
       print("ckpt.model_checkpoint_path = {}".format(ckpt.model_checkpoint_path))
       print("ckpt_name = {}".format(ckpt_name))
       dcgan.saver.restore(sess, os.path.join(FLAGS.checkpoint_dir, ckpt_name))

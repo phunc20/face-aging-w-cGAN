@@ -48,10 +48,7 @@ def get_image(image_path):
   im = im.resize((64,64))
   #im = np.array(im).astype(np.float32) / 255   # dtype('float32')
   # We want the entries \in [-1, 1], instead of \in [0, 1],
-  # So we cannot simply use the previous line.
   im = np.array(im).astype(np.float32)
-  #maxx = float(im.max())
-  #minn = float(im.min())
   maxx = im.max()
   minn = im.min()
   mid = (maxx + minn) / 2
