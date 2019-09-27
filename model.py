@@ -12,6 +12,19 @@ from tensorflow.keras.preprocessing import image as kimage
 
 from ops import *
 from utils import *
+import utils
+
+
+class bcolors:
+  HEADER = '\033[95m'
+  OKBLUE = '\033[94m'
+  OKGREEN = '\033[92m'
+  WARNING = '\033[93m'
+  FAIL = '\033[91m'
+  ENDC = '\033[0m'
+  BOLD = '\033[1m'
+  UNDERLINE = '\033[4m'
+
 
 def conv_out_size_same(size, stride):
   return int(math.ceil(float(size) / float(stride)))
@@ -24,9 +37,9 @@ def gen_random(mode, size):
 
 class DCGAN(object):
   def __init__(self, sess,
-         input_height=108, input_width=108, crop=True,
+         #input_height=108, input_width=108,
          batch_size=64, sample_num = 64,
-         output_height=64, output_width=64,
+         #output_height=64, output_width=64,
          y_dim=6, z_dim=100, gf_dim=64, df_dim=64,
          gfc_dim=1024, dfc_dim=1024, c_dim=3,
          dataset_name='default',
@@ -34,7 +47,6 @@ class DCGAN(object):
          input_fname_pattern='*.jpg',
          data_dir=os.path.join(os.environ["HOME"],"datasets", "UTKFace")):
     """
-
     Args:
       sess: TensorFlow session
       batch_size: The size of batch. Should be specified before training.
@@ -50,15 +62,14 @@ class DCGAN(object):
       gf_dim: default to 64. Better understood as n_channels.
     """
     self.sess = sess
-    self.crop = crop
 
     self.batch_size = batch_size
     self.sample_num = sample_num
 
-    self.input_height = input_height
-    self.input_width = input_width
-    self.output_height = output_height
-    self.output_width = output_width
+    #self.input_height = input_height
+    #self.input_width = input_width
+    #self.output_height = output_height
+    #self.output_width = output_width
 
     self.y_dim = y_dim
     self.z_dim = z_dim
@@ -95,11 +106,11 @@ class DCGAN(object):
     self.max_to_keep = max_to_keep
 
     #data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
-    #self.data = glob(data_path)
+    data_fpaths = os.path.join(self.data_dir, self.input_fname_pattern)
+    self.data = glob(data_fpaths)
     #self.data = glob(os.path.join(
-    #    "/home/wucf20/Documents/home/wucf20/Desktop/TruongHV/2019/age-progression/datasets/UTKFace-clean", "*.jpg"))
-    self.data = glob(os.path.join(
-        "/home/phunc20/datasets/faces/all-races", "*.jpg"))
+    #    "/home/phunc20/datasets/faces/all-races", "*.jpg"))
+    
     if len(self.data) == 0:
       raise Exception("[!] No data found in '" + data_path + "'")
     #np.random.shuffle(self.data)
@@ -110,7 +121,7 @@ class DCGAN(object):
       self.c_dim = 1
 
     if len(self.data) < self.batch_size:
-      raise Exception("[!] Entire dataset size is less than the configured batch_size")
+      raise Exception("[!] Entire dataset size ({}) is less than batch_size ({})".format(len(self.data), self.batch_size))
     
     self.grayscale = (self.c_dim == 1)
 
@@ -118,23 +129,17 @@ class DCGAN(object):
 
   def build_model(self):
     if self.y_dim:
-      #self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
       self.y = tf.placeholder(tf.float32, [None, self.y_dim], name='y')
     else:
       self.y = None
 
-    if self.crop:
-      image_dims = [self.output_height, self.output_width, self.c_dim]
-    else:
-      image_dims = [self.input_height, self.input_width, self.c_dim]
+    image_dims =  [*utils.IMG_RESOLUTION, self.c_dim]
+    # Normally, we should have
+    # image_dims equal to [64, 64, 3]
 
-    #self.inputs = tf.placeholder(
-    #  tf.float32, [self.batch_size] + image_dims, name='real_images')
     self.inputs = tf.placeholder(
       tf.float32, [None] + image_dims, name='real_images')
 
-    #self.inputs2 = tf.placeholder(
-    #  tf.float32, [self.batch_size] + image_dims, name='real_img_wrong_age')
     self.inputs2 = tf.placeholder(
       tf.float32, [None] + image_dims, name='real_img_wrong_age')
 
@@ -145,8 +150,8 @@ class DCGAN(object):
       tf.float32, [None, self.z_dim], name='z')
     self.z_sum = histogram_summary("z", self.z)
 
-    self.G                  = self.generator(self.z, self.y)
-    self.D, self.D_logits   = self.discriminator(inputs, self.y, reuse=False)
+    self.G = self.generator(self.z, self.y)
+    self.D, self.D_logits = self.discriminator(inputs, self.y, reuse=False)
     # self.y2 will consist of wrong ages, e.g. young face w/ old age.
     self.y2 = tf.placeholder(tf.float32, [None, self.y_dim], name='y2')
     self.D2, self.D_logits2 = self.discriminator(inputs2, self.y2, reuse=True)
@@ -355,10 +360,14 @@ class DCGAN(object):
       batch_fnames = []
       for batch_file in batch_files:
         batch.append(get_image(batch_file))
-        #print(bcolors.OKGREEN + bcolors.BOLD, end='')
-        #print("batch_file.split('_')[0] = {}".format(batch_file.split('_')[0]))
-        #print(bcolors.ENDC)
-        age = int(os.path.basename(batch_file).split('_')[0])
+        #age = int(os.path.basename(batch_file).split('_')[0])
+        try:
+          age = int(os.path.basename(batch_file).split('_')[0])
+        except:
+          print(bcolors.OKGREEN + bcolors.BOLD, end='')
+          print("batch_file.split('_')[0] = {}".format(batch_file.split('_')[0]))
+          print(bcolors.ENDC)
+          raise Exception
         fname = os.path.basename(batch_file)
         batch_y.append(age_to_1hot(age))
         batch_fnames.append(fname)
@@ -630,8 +639,8 @@ class DCGAN(object):
 
     """
     with tf.variable_scope("generator") as scope:
-      s_h, s_w = self.output_height, self.output_width
-      # 64, 64 (by default)
+      #s_h, s_w = self.output_height, self.output_width
+      s_h, s_w = utils.IMG_RESOLUTION
       s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
       # 32, 32
       s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
@@ -696,7 +705,8 @@ class DCGAN(object):
     with tf.variable_scope("generator") as scope:
       scope.reuse_variables()
 
-      s_h, s_w = self.output_height, self.output_width
+      #s_h, s_w = self.output_height, self.output_width
+      s_h, s_w = utils.IMG_RESOLUTION
       s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
       s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
       s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
@@ -730,11 +740,14 @@ class DCGAN(object):
       return tf.nn.tanh(h4)
 
 
-  @property
-  def model_dir(self):
-    return "{}_{}_{}_{}".format(
-        self.dataset_name, self.batch_size,
-        self.output_height, self.output_width)
+  #@property
+  #def model_dir(self):
+  #  #return "{}_{}_{}_{}".format(
+  #  #    self.dataset_name, self.batch_size,
+  #  #    self.output_height, self.output_width)
+  #  return "{}_{}_{}_{}".format(
+  #      self.dataset_name, self.batch_size,
+  #      *utils.IMG_RESOLUTION)
 
   def save(self, checkpoint_dir, step, filename='model', ckpt=True, frozen=False):
     # model_name = "DCGAN.model"

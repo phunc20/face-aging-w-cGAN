@@ -5,24 +5,26 @@ from __future__ import division
 import math
 import json
 import random
+import os
 import pprint
+import time
+import datetime
+from six.moves import xrange
+from time import gmtime, strftime
+
 import scipy.misc
 import cv2
 import numpy as np
-import os
 from PIL import Image as pil_image
-import time
-import datetime
-from time import gmtime, strftime
-from six.moves import xrange
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-pp = pprint.PrettyPrinter()
+#pp = pprint.PrettyPrinter()
 
 get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
 
+IMG_RESOLUTION = [64, 64]
 
 def expand_path(path):
   return os.path.expanduser(os.path.expandvars(path))
@@ -45,7 +47,7 @@ def show_all_variables():
 
 def get_image(image_path):
   im = pil_image.open(image_path)
-  im = im.resize((64,64))
+  im = im.resize(IMG_RESOLUTION)
   #im = np.array(im).astype(np.float32) / 255   # dtype('float32')
   # We want the entries \in [-1, 1], instead of \in [0, 1],
   im = np.array(im).astype(np.float32)
