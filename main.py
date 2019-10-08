@@ -28,11 +28,12 @@ flags.DEFINE_string("data_dir", "/home/wucf20/Documents/home/wucf20/Desktop/Truo
 # - When you run main.py w/o specifying the flag, it'll be False;
 # - When you run main.py and do specify the flag, it'll be True.
 flags.DEFINE_integer("max_to_keep", 1000, "maximum number of checkpoints to keep")
-flags.DEFINE_integer("sample_freq", 100, "sample every this many iterations")
+#flags.DEFINE_integer("sample_freq", 100, "sample every this many iterations")
 flags.DEFINE_integer("ckpt_freq", 100, "save checkpoint every this many iterations")
 flags.DEFINE_integer("z_dim", 100, "dimensions of z")
 flags.DEFINE_string("z_dist", "normal01", '"normal01" (default) or "uniform_unsigned" or "uniform_signed"')
 #flags.DEFINE_boolean("G_img_sum", False, "Save generator image summaries in log")
+flags.DEFINE_string("continue_on", None, "The path to the directory of old checkpoints that you want to continue training on, e.g., cGAN-ckpts/g2d3-normal01-2019-10-05_12h38m45s/")
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -66,6 +67,7 @@ def main(_):
         input_fname_pattern=FLAGS.input_fname_pattern,
         #crop=FLAGS.crop,
         data_dir=FLAGS.data_dir,
+        continue_on=FLAGS.continue_on,
         max_to_keep=FLAGS.max_to_keep)
 
     #show_all_variables()

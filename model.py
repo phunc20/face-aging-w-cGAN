@@ -38,13 +38,15 @@ def gen_random(mode, size):
 class DCGAN(object):
   def __init__(self, sess,
          #input_height=108, input_width=108,
-         batch_size=64, sample_num = 64,
+         batch_size=64,
+         sample_num = 64,
          #output_height=64, output_width=64,
          y_dim=6, z_dim=100, gf_dim=64, df_dim=64,
          gfc_dim=1024, dfc_dim=1024, c_dim=3,
          dataset_name='default',
          max_to_keep=1,
          input_fname_pattern='*.jpg',
+         continue_on=None,
          data_dir=os.path.join(os.environ["HOME"],"datasets", "UTKFace")):
     """
     Args:
@@ -103,6 +105,7 @@ class DCGAN(object):
                    )
     #self.checkpoint_dir = checkpoint_dir
     self.data_dir = data_dir
+    self.continue_on = continue_on
     self.max_to_keep = max_to_keep
 
     #data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
@@ -232,11 +235,24 @@ class DCGAN(object):
     os.makedirs(cGAN_img_eval, exist_ok=True)
     n_times_g = 2
     n_times_d = 3
-    tstamp = "g{}d{}-".format(n_times_g, n_times_d) \
-              + config.z_dist + "-" + \
-              time.strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    #img_dir = "images-" + config.z_dist + "-" + time.strftime("%Y%m%d-%Hh%Mm%Ss")
-    #img_dir = "gdrate-{}-{}-".format(n_times_g, n_times_d) + img_dir
+    if not self.continue_on:
+      print("continue_on is set to None")
+      tstamp = "g{}d{}-".format(n_times_g, n_times_d) \
+                + config.z_dist + "-" + \
+                time.strftime("%Y-%m-%d_%Hh%Mm%Ss")
+      print("tstamp = {}".format(tstamp))
+      input("Arretez ce programme. (Ctrl + C)")
+    else:
+      print("continue_on is set to {}".format(self.continue_on))
+      tstamp = self.continue_on.strip(os.sep).split(os.sep)[-1]
+      if tstamp == '':
+        raise ValueError("Invalid continue_on arg (resulting in an empty string tstamp)")
+      print("tstamp = {}".format(tstamp))
+      input("Arretez ce programme. (Ctrl + C)")
+
+    #tstamp = "g{}d{}-".format(n_times_g, n_times_d) \
+    #          + config.z_dist + "-" + \
+    #          time.strftime("%Y-%m-%d_%Hh%Mm%Ss")
     img_dir = os.path.join(cGAN_img_eval, tstamp)
     log_file_path = os.path.join(img_dir, "train-log")
     os.makedirs(img_dir, exist_ok=True)
@@ -248,8 +264,9 @@ class DCGAN(object):
     
     out_parent_dir = "cGAN-ckpts"
     self.out_dir = os.path.join(out_parent_dir, tstamp)
-    os.makedirs(self.out_dir, exist_ok=True)
-    self.ckpts_dir = os.path.join(self.out_dir,"ckpts")
+    # TODO: consider delete next redundant line
+    #os.makedirs(self.out_dir, exist_ok=True)
+    self.ckpts_dir = os.path.join(self.out_dir, "ckpts")
     os.makedirs(self.ckpts_dir, exist_ok=True)
 
     counter = 1
@@ -270,9 +287,9 @@ class DCGAN(object):
         sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
         np.save(sample_z_path, sample_z)
     else:
-      print(" [!] Load failed...")
+      print(" [!] Loading failed. Please specify existing checkpoints.")
       self.build_model()
-      print(" [*] Creating 10 new subjects... (sample_z)") 
+      print(" [*] Creating 10 new subjects (sample_z)") 
 
 
     # Optimizers' choice
@@ -560,7 +577,7 @@ class DCGAN(object):
           recall = TP/(TP + FN)
           precision = TP/(TP + FP)
           lines = []
-          line_loss = "[%8d Epoch:[%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+          line_loss = "  Iter:[%8d]  Epoch:[%2d/%2d]  Batch:[%4d/%4d]  Time: %4.4f  d_loss: %.8f  g_loss: %.8f" \
             % (counter, epoch + 1, config.epoch, idx + 1, batch_idxs,
               time.time() - start_time, errD_fake+errD_real, errG)
           lines.append(line_loss)
@@ -770,7 +787,7 @@ class DCGAN(object):
               as_text=False)
 
   def load(self, checkpoint_dir):
-    print(" [*] Reading checkpoints...", checkpoint_dir)
+    print(" [*] Reading checkpoints", checkpoint_dir)
     # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
     # print("     ->", checkpoint_dir)
 
@@ -782,5 +799,5 @@ class DCGAN(object):
       print(" [*] Success to read {}".format(ckpt_name))
       return True, counter
     else:
-      print(" [*] Failed to find a checkpoint")
+      print(" [*] Failed to find any checkpoint in", checkpoint_dir)
       return False, 0
