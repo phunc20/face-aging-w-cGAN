@@ -70,7 +70,21 @@ def main(_):
         continue_on=FLAGS.continue_on,
         max_to_keep=FLAGS.max_to_keep)
 
-    #show_all_variables()
+    ##show_all_variables()
+    #switch = False
+    #if switch:
+    #  out_parent_dir = "cGAN-ckpts"
+    #  tstamp = FLAGS.continue_on.strip(os.sep).split(os.sep)[-1]
+    #  out_dir = os.path.join(out_parent_dir, tstamp)
+    #  ckpts_dir = os.path.join(out_dir, "ckpts")
+    #  ckpt = tf.train.get_checkpoint_state(ckpts_dir)
+    #  if ckpt and ckpt.model_checkpoint_path:
+    #    ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+    #    print("ckpt.model_checkpoint_path = {}".format(ckpt.model_checkpoint_path))
+    #    print("ckpt_name = {}".format(ckpt_name))
+    #    #print("".format())
+    #    dcgan.saver.restore(sess, os.path.join(ckpts_dir, ckpt_name))
+
     dcgan.train(FLAGS)
     
 if __name__ == '__main__':

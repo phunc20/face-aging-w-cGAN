@@ -1,10 +1,10 @@
 from __future__ import division
 from __future__ import print_function
-import os
-import time
-import math
 from glob import glob
+import math
+import os
 from six.moves import xrange
+import time
 
 import tensorflow as tf
 import numpy as np
@@ -37,17 +37,17 @@ def gen_random(mode, size):
 
 class DCGAN(object):
   def __init__(self, sess,
-         #input_height=108, input_width=108,
-         batch_size=64,
-         sample_num = 64,
-         #output_height=64, output_width=64,
-         y_dim=6, z_dim=100, gf_dim=64, df_dim=64,
-         gfc_dim=1024, dfc_dim=1024, c_dim=3,
-         dataset_name='default',
-         max_to_keep=1,
-         input_fname_pattern='*.jpg',
-         continue_on=None,
-         data_dir=os.path.join(os.environ["HOME"],"datasets", "UTKFace")):
+    #input_height=108, input_width=108,
+    batch_size=64,
+    sample_num = 64,
+    #output_height=64, output_width=64,
+    y_dim=6, z_dim=100, gf_dim=64, df_dim=64,
+    gfc_dim=1024, dfc_dim=1024, c_dim=3,
+    dataset_name='default',
+    max_to_keep=1,
+    input_fname_pattern='*.jpg',
+    continue_on=None,
+    data_dir=os.path.join(os.environ["HOME"],"datasets", "UTKFace")):
     """
     Args:
       sess: TensorFlow session
@@ -99,10 +99,7 @@ class DCGAN(object):
     self.input_fname_pattern = input_fname_pattern  # e.g. *.jpg
     ckpts_dir = "cGAN-ckpts"
     os.makedirs(ckpts_dir, exist_ok=True)
-    self.out_dir = os.path.join(ckpts_dir,
-                     ("g{}d{}"
-                     )
-                   )
+    #self.out_dir = os.path.join(ckpts_dir, "g{}d{}")
     #self.checkpoint_dir = checkpoint_dir
     self.data_dir = data_dir
     self.continue_on = continue_on
@@ -128,7 +125,7 @@ class DCGAN(object):
     
     self.grayscale = (self.c_dim == 1)
 
-    #self.build_model()
+    self.build_model()
 
   def build_model(self):
     if self.y_dim:
@@ -229,6 +226,20 @@ class DCGAN(object):
       train(FLAGS)
     So, think of config as FLAGS.
     """
+    # Optimizers' choice
+    # N.B. This part of initialization of var should
+    # DEFINITELY lie before saver.restore()!!
+    # You have suffered from this but a lot.
+    d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+              .minimize(self.d_loss, var_list=self.d_vars)
+    g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+              .minimize(self.g_loss, var_list=self.g_vars)
+    try:
+      tf.global_variables_initializer().run()
+    except:
+      tf.initialize_all_variables().run()
+
+    
     # Construct (or Identify the existing)
     # folders for ckpts and image files.
     cGAN_img_eval = "cGAN-img-eval"
@@ -236,12 +247,12 @@ class DCGAN(object):
     n_times_g = 2
     n_times_d = 3
     if not self.continue_on:
-      print("continue_on is set to None")
+      print("continue_on is NOT set")
       tstamp = "g{}d{}-".format(n_times_g, n_times_d) \
                 + config.z_dist + "-" + \
                 time.strftime("%Y-%m-%d_%Hh%Mm%Ss")
       print("tstamp = {}".format(tstamp))
-      input("Arretez ce programme. (Ctrl + C)")
+      input("Arretez ce programme par (Ctrl + C) si tu veux. Epuyez d'autre key pour continuer.")
     else:
       print("continue_on is set to {}".format(self.continue_on))
       tstamp = self.continue_on.strip(os.sep).split(os.sep)[-1]
@@ -267,6 +278,7 @@ class DCGAN(object):
     # TODO: consider delete next redundant line
     #os.makedirs(self.out_dir, exist_ok=True)
     self.ckpts_dir = os.path.join(self.out_dir, "ckpts")
+    #self.ckpts_dir = os.path.join(self.out_dir, "checkpoint")
     os.makedirs(self.ckpts_dir, exist_ok=True)
 
     counter = 1
@@ -276,41 +288,31 @@ class DCGAN(object):
     npy_saved_sample_z = "sample_z.npy"
     sample_z_path = os.path.join(self.out_dir, npy_saved_sample_z)
     if could_load:
-      counter = checkpoint_counter
+      counter = checkpoint_counter + 1
       print(" [*] Load ckpt SUCCESSfully")
       if os.path.exists(sample_z_path):
         sample_z = np.load(sample_z_path)
+        print("Load sample_z SUCCESSfully!")
       else:
         print(" [!] Intermediate changing period")
         print(" [!] ckpt exists but no sample_z.py")
         np.random.seed(42)
         sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
         np.save(sample_z_path, sample_z)
+      #self.load(self.ckpts_dir)
     else:
       print(" [!] Loading failed. Please specify existing checkpoints.")
-      self.build_model()
+      #self.build_model()
       print(" [*] Creating 10 new subjects (sample_z)") 
+      sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
+      np.save(sample_z_path, sample_z)
+      
+    # sample_z contains more than 10 instances, just to be more flexible.
+    # Here I set it to be 30, but it can be any int (>= 10).
+    #sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
+    #np.save(sample_z_path, sample_z)
 
 
-    # Optimizers' choice
-    d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-              .minimize(self.d_loss, var_list=self.d_vars)
-    g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-              .minimize(self.g_loss, var_list=self.g_vars)
-    try:
-      tf.global_variables_initializer().run()
-    except:
-      tf.initialize_all_variables().run()
-
-    """
-    if config.G_img_sum:
-      self.g_sum = merge_summary([self.z_sum, self.d__sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
-    else:
-      self.g_sum = merge_summary([self.z_sum, self.d__sum, self.d_loss_fake_sum, self.g_loss_sum])
-    self.d_sum = merge_summary(
-        [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-    self.writer = SummaryWriter(os.path.join(self.out_dir, "logs"), self.sess.graph)
-    """
 
     def wrong(y):
       """
@@ -344,10 +346,6 @@ class DCGAN(object):
     else:
       sample_inputs = np.array(sample).astype(np.float32)
   
-      # sample_z contains more than 10 instances, just to be more flexible.
-      # Here I set it to be 30, but it can be any int (>= 10).
-      sample_z = gen_random(config.z_dist, size=(30, self.z_dim)).astype(np.float32)
-      np.save(sample_z_path, sample_z)
 
     # Construction of sample_10_z and B. (cf. line 524)
     # 7 subjects and 3 random
@@ -757,14 +755,14 @@ class DCGAN(object):
       return tf.nn.tanh(h4)
 
 
-  #@property
-  #def model_dir(self):
-  #  #return "{}_{}_{}_{}".format(
-  #  #    self.dataset_name, self.batch_size,
-  #  #    self.output_height, self.output_width)
-  #  return "{}_{}_{}_{}".format(
-  #      self.dataset_name, self.batch_size,
-  #      *utils.IMG_RESOLUTION)
+  @property
+  def model_dir(self):
+    #return "{}_{}_{}_{}".format(
+    #    self.dataset_name, self.batch_size,
+    #    self.output_height, self.output_width)
+    return "{}_{}_{}_{}".format(
+        self.dataset_name, self.batch_size,
+        *utils.IMG_RESOLUTION)
 
   def save(self, checkpoint_dir, step, filename='model', ckpt=True, frozen=False):
     # model_name = "DCGAN.model"
@@ -788,16 +786,20 @@ class DCGAN(object):
 
   def load(self, checkpoint_dir):
     print(" [*] Reading checkpoints", checkpoint_dir)
-    # checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
-    # print("     ->", checkpoint_dir)
-
     ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
     if ckpt and ckpt.model_checkpoint_path:
       ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+      print("ckpt.model_checkpoint_path = {}".format(ckpt.model_checkpoint_path))
+      print("ckpt_name = {}".format(ckpt_name))
+      #print("".format())
       self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+      print("whole path to ckpt = {}".format(os.path.join(checkpoint_dir, ckpt_name)))
       counter = int(ckpt_name.split('-')[-1])
-      print(" [*] Success to read {}".format(ckpt_name))
+      print(" [*] Succeeded in reading {}".format(ckpt_name))
+      print("counter = {}".format(counter))
       return True, counter
     else:
       print(" [*] Failed to find any checkpoint in", checkpoint_dir)
-      return False, 0
+      #return False, 0
+      # The 2nd return value matters little.
+      return False, -1
